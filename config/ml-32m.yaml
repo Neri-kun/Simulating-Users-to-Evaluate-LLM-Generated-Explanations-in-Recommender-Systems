@@ -1,0 +1,63 @@
+dataset: ml-32m
+data_path: dataset/
+
+#save_dataset: True
+#resume_checkpoint: saved/LightGCN-Jan-07-2026_10-19-16.pth
+
+USER_ID_FIELD: user_id
+ITEM_ID_FIELD: item_id
+RATING_FIELD: rating
+TIME_FIELD: timestamp
+
+# 1. Input is 32x32 (Embedding Size)
+embedding_size: 32
+
+# 2. Define exactly 3 Layers (Input + 3 outputs)
+#    Shape evolution: 32 -> 15 -> 6 -> 2 (Stops here safely)
+cnn_channels: [1, 32, 32, 32]
+
+# 3. Define 3 Kernels
+cnn_kernels: [4, 4, 4]
+
+# 4. Define 3 Strides
+cnn_strides: [2, 2, 2]
+ #1. Tiny Input (16x16)
+#embedding_size: 16
+#
+## 2. Define exactly 2 Layers (Input + 2 outputs)
+##    Shape evolution: 16 -> 7 -> 2 (Stops here safely)
+#cnn_channels: [1, 32, 32]
+#
+## 3. Define 2 Kernels
+#cnn_kernels: [4, 4]
+#
+## 4. Define 2 Strides
+#cnn_strides: [2, 2]
+
+field_separator: "\t"
+load_col:
+  inter: [user_id, item_id, rating, timestamp]
+  item: [item_id, title, genres]
+
+# Filtering (important for stability)
+min_user_inter_num: 5
+min_item_inter_num: 5
+
+# Training
+train_batch_size: 4096
+eval_batch_size: 4096
+learning_rate: 0.001
+epochs: 300
+
+# Evaluation
+eval_args:
+  split: {RS: [0.8, 0.1, 0.1]}
+  group_by: user
+  order: TO
+  mode: full
+
+metrics: [Recall, NDCG, MRR]
+topk: [10, 20]
+valid_metric: MRR@10
+
+neg_sampling: null

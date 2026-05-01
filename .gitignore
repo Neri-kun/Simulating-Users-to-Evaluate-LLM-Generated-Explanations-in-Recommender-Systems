@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# IDE
+.idea/
+.idea_backup/
+
+# Datasets (too large for GitHub)
+dataset/
+datasets/
+ml-32m/
+new-ml-32m-dataset/
+saved/
+*.inter
+*.item
+users.dat
+
+# Logs and outputs
+log/
+log_tensorboard/
+*.log
+
+# Generated figures and CSVs
+figures/
+*.png
+*.csv
+*.json

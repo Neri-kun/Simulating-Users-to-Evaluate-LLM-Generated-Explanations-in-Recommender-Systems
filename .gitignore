@@ -109,21 +109,3 @@ figures/
 *.svg
 *.csv
 *.json
-
-# ---------------------------------------------------------------------------
-# Re-included on purpose. These rules come last so they override the broad
-# patterns above (in .gitignore the LAST matching rule wins).
-#
-# split_ml32m/ holds the 80/10/10 split: the train/valid/test CSVs are derived
-# MovieLens data and stay out, but the RecBole configs and the small result
-# metrics are needed to interpret the reported numbers.
-# ---------------------------------------------------------------------------
-split_ml32m/*
-!split_ml32m/recbole_general.yaml
-!split_ml32m/recbole_sequential.yaml
-!split_ml32m/split_info.json
-!split_ml32m/comparison.csv
-!split_ml32m/results/
-split_ml32m/results/*
-!split_ml32m/results/*.json
-!split_ml32m/results/*.npz

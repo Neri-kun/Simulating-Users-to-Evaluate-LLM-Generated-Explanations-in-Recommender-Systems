@@ -35,16 +35,26 @@ cnn_strides: [2, 2, 2]
 #cnn_strides: [2, 2]
 
 field_separator: "\t"
+# When load_col is set, RecBole treats sources NOT listed here as "load
+# nothing" and _load_feat returns None — which makes _check_kg crash with
+# "argument of type 'NoneType' is not iterable". So KG-consuming models
+# (KGAT, KGCN, CFKG, ...) need kg/link entries added explicitly. The `ent`
+# entry is harmless when the .ent file isn't loaded (only matters when a
+# GRU4RecKG run flips additional_feat_suffix on via config_dict).
 load_col:
   inter: [user_id, item_id, rating, timestamp]
   item: [item_id, title, genres]
+  kg: [head_id, relation_id, tail_id]
+  link: [item_id, entity_id]
+  ent: [ent_id, ent_emb]
+  rel:  [rel_id, rel_emb]     # <-- add this
 
 # Filtering (important for stability)
 min_user_inter_num: 5
 min_item_inter_num: 5
 
 # Training
-train_batch_size: 4096
+train_batch_size: 2048    #default RecBole config value
 eval_batch_size: 4096
 learning_rate: 0.001
 epochs: 300
@@ -54,9 +64,9 @@ eval_args:
   split: {RS: [0.8, 0.1, 0.1]}
   group_by: user
   order: TO
-  mode: full
+  mode: uni50 #full
 
-metrics: [Recall, NDCG, MRR]
+metrics: [Precision, Recall, NDCG, MRR, ItemCoverage]
 topk: [10, 20]
 valid_metric: MRR@10
 

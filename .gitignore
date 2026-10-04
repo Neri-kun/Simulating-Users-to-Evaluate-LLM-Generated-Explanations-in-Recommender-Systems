@@ -1,31 +1,129 @@
+# ---------------------------------------------------------------------------
 # Python
+# ---------------------------------------------------------------------------
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 venv/
 .venv/
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
 
-# IDE
+# ---------------------------------------------------------------------------
+# IDE / tooling
+# ---------------------------------------------------------------------------
 .idea/
 .idea_backup/
+.vscode/
+.claude/
+.aider*
+.DS_Store
+Thumbs.db
 
-# Datasets (too large for GitHub)
+# ---------------------------------------------------------------------------
+# Secrets - never commit credentials
+# ---------------------------------------------------------------------------
+.env
+.env.*
+*.pem
+*.key
+credentials*
+*.netrc
+
+# ---------------------------------------------------------------------------
+# Datasets.
+# MovieLens (GroupLens) and IMDb data may NOT be redistributed. Download them
+# from the original sources instead - see README.md.
+# ---------------------------------------------------------------------------
+data/
 dataset/
 datasets/
+ml-1m/
+ml-10m/
+ml-20m/
 ml-32m/
 new-ml-32m-dataset/
-saved/
+generated/
+
+# RecBole atomic files and raw MovieLens/IMDb tables
 *.inter
 *.item
-users.dat
+*.user
+*.kg
+*.link
+*.dat
+ratings.csv
+movies.csv
+links.csv
+tags.csv
+genome-*.csv
+*.tsv
+*.tsv.gz
 
-# Logs and outputs
+# ---------------------------------------------------------------------------
+# Model weights, checkpoints and cached tensors
+# ---------------------------------------------------------------------------
+saved/
+finetuned/
+p5-ckpt-*/
+p5-ml32m/
+p5-ml32m-ckpt/
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+*.bin
+*.h5
+*.onnx
+*.npz
+*.npy
+*.pkl
+*.pickle
+*.joblib
+*.zip
+*.tar
+*.tar.gz
+*.gz
+
+# ---------------------------------------------------------------------------
+# Logs and run outputs
+# ---------------------------------------------------------------------------
 log/
 log_tensorboard/
+logs/
 *.log
+runs/
+wandb/
+llm_rating_results/
 
-# Generated figures and CSVs
+# ---------------------------------------------------------------------------
+# Generated figures and bulk result tables
+# ---------------------------------------------------------------------------
 figures/
 *.png
+*.jpg
+*.jpeg
+*.pdf
+*.svg
 *.csv
 *.json
+
+# ---------------------------------------------------------------------------
+# Re-included on purpose. These rules come last so they override the broad
+# patterns above (in .gitignore the LAST matching rule wins).
+#
+# split_ml32m/ holds the 80/10/10 split: the train/valid/test CSVs are derived
+# MovieLens data and stay out, but the RecBole configs and the small result
+# metrics are needed to interpret the reported numbers.
+# ---------------------------------------------------------------------------
+split_ml32m/*
+!split_ml32m/recbole_general.yaml
+!split_ml32m/recbole_sequential.yaml
+!split_ml32m/split_info.json
+!split_ml32m/comparison.csv
+!split_ml32m/results/
+split_ml32m/results/*
+!split_ml32m/results/*.json
+!split_ml32m/results/*.npz

@@ -47,6 +47,9 @@ from pathlib import Path
 
 import numpy as np
 
+
+ROOT = Path(__file__).resolve().parent.parent
+
 # --------------------------------------------------------------------------- #
 # NumPy 2.0 compatibility shim for RecBole.
 # RecBole's `compatibility_settings()` does things like `np.float = np.float_`,
@@ -784,15 +787,17 @@ def plot_education_occupation_heatmap(inter_df: pd.DataFrame, out_dir: Path):
 # --------------------------------------------------------------------------- #
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data_path", default="./dataset",
+    parser.add_argument("--data_path", default=str(ROOT / "dataset"),
                         help="Folder containing <dataset>/<dataset>.* atomic files")
     parser.add_argument("--dataset", default="adult",
                         help="RecBole dataset name (folder + filename prefix)")
-    parser.add_argument("--out", default="./figures",
+    parser.add_argument("--out", default=str(ROOT / "figures"),
                         help="Where to write the PNGs")
     args = parser.parse_args()
 
-    out_dir = Path(args.out)
+    # Resolve whatever was passed so relative args also stop depending on cwd.
+    args.data_path = str(Path(args.data_path).expanduser().resolve())
+    out_dir = Path(args.out).expanduser().resolve()
     sns.set_theme(style="whitegrid")
 
     print(f"[1/4] Loading `{args.dataset}` from {args.data_path} via RecBole ...")

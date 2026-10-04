@@ -235,14 +235,61 @@ from recbole.config import Config
 from recbole.data import create_dataset, data_preparation
 from recbole.utils import init_logger, get_model, get_trainer
 
-# ---- PyTorch compatibility fix ----
-_original_torch_load = torch.load
-def torch_load_compat(*args, **kwargs):
-    kwargs.setdefault("weights_only", False)
-    return _original_torch_load(*args, **kwargs)
-torch.load = torch_load_compat
+# (torch.load compat patch is already applied above at lines 96-101 — do not redefine,
+# or torch.load ends up calling itself recursively during checkpoint reload.)
+
+# ---- KnowledgeBasedDataLoader.dataset alias ----
+# RecBole's AbstractDataLoader inherits torch.utils.data.DataLoader, which
+# exposes .dataset for free; KnowledgeBasedDataLoader does NOT inherit from it
+# and only stores self._dataset. RecBole's own eval_collector.data_collect
+# (and a few other internal sites) call train_data.dataset, which then
+# AttributeErrors for KG models. Add a public alias so the internals work.
+from recbole.data.dataloader.knowledge_dataloader import KnowledgeBasedDataLoader
+if not hasattr(KnowledgeBasedDataLoader, "dataset"):
+    KnowledgeBasedDataLoader.dataset = property(lambda self: self._dataset)
+
+import numpy as np
+from recbole.model.abstract_recommender import GeneralRecommender
+from recbole.model.general_recommender import itemknn as _itemknn_mod
+from recbole.model.general_recommender.itemknn import ComputeSimilarity
+
+def _itemknn_init_csr(self, config, dataset):
+    GeneralRecommender.__init__(self, config, dataset)
+    self.k = config["k"]
+    self.shrink = config["shrink"] if "shrink" in config else 0.0
+    self.interaction_matrix = dataset.inter_matrix(form="csr").astype(np.float32)
+    assert self.n_users == self.interaction_matrix.shape[0]
+    assert self.n_items == self.interaction_matrix.shape[1]
+    _, self.w = ComputeSimilarity(
+        self.interaction_matrix, topk=self.k, shrink=self.shrink
+    ).compute_similarity("item")
+    self.pred_mat = self.interaction_matrix.dot(self.w).tocsr()
+    self.fake_loss = torch.nn.Parameter(torch.zeros(1))
+    self.other_parameter_name = ["w", "pred_mat"]
+
+_itemknn_mod.ItemKNN.__init__ = _itemknn_init_csr
 
 
+
+# ---- Collector.get_data_struct int-vs-tensor fix (RecBole issue #2131) ----
+# Metrics like ItemCoverage / GiniIndex / ShannonEntropy register
+# 'data.num_items' as a plain int. The stock get_data_struct calls .cpu() on
+# every collected value, which crashes on that int. Only coerce tensors.
+import copy
+from recbole.evaluator.collector import Collector
+
+def _get_data_struct_tensor_safe(self):
+    for key in self.data_struct._data_dict:
+        value = self.data_struct._data_dict[key]
+        if isinstance(value, torch.Tensor):
+            self.data_struct._data_dict[key] = value.cpu()
+    returned_struct = copy.deepcopy(self.data_struct)
+    for key in ["rec.topk", "rec.meanrank", "rec.score", "rec.items", "data.label"]:
+        if key in self.data_struct:
+            del self.data_struct[key]
+    return returned_struct
+
+Collector.get_data_struct = _get_data_struct_tensor_safe
 
 #LightGCN - for some reason e mai rapid pe CPU
 def run_ml32m():
@@ -334,39 +381,196 @@ def run_ml32m():
     #     }
     # )
 
-    config = Config(
-        model="SpectralCF",
-        config_file_list=["config/ml-32m.yaml"],
-        config_dict={
-            "use_gpu": True,
-            "gpu_id": 0,
-            "data_path": "dataset/",
-            # --- THE PRE-SPLIT OVERRIDE ---
-            #"benchmark_filename": ['train', 'valid', 'test'],
-            "accumulation_steps": 8,
-            "train_batch_size": 4096,  # This makes the REAL batch 16,384 (4096 * 4)
-            "eval_batch_size": 4096,
-            #"train_batch_size": 16384,  # Lowered for stability on 32M dataset
-            #"eval_batch_size": 16384,
-            "worker": 0,
-            # --- THE FIX FOR KEYERROR ---
-            #"train_neg_sample_args":None,
-            # "train_neg_sample_args": {
-            #     "strategy": "by",  # Sample negatives by a specific distribution
-            #     "by": 1,  # 1 negative for every 1 positive interaction
-            #     "distribution": "uniform"
-            # },
-            # --- THE FIX FOR THE KEYERROR FOR GRU4RecF---
-            "selected_features": ["genres"],
-            "eval_args": {
-                "split": {"RS": [0.8, 0.1, 0.1]},
-                "group_by": "user",
-                "order": "TO",
-                "mode": "uni100"
-            },
+    # config = Config(
+    #     model="SpectralCF",
+    #     config_file_list=["config/ml-32m.yaml"],
+    #     config_dict={
+    #         "use_gpu": True,
+    #         "gpu_id": 0,
+    #         "data_path": "dataset/",
+    #         "accumulation_steps": 8,
+    #         "train_batch_size": 4096,
+    #         "eval_batch_size": 4096,
+    #         "worker": 0,
+    #         "selected_features": ["genres"],
+    #         "eval_args": {
+    #             "split": {"RS": [0.8, 0.1, 0.1]},
+    #             "group_by": "user",
+    #             "order": "TO",
+    #             "mode": "uni100"
+    #         },
+    #         "eval_step": 1,
+    #     }
+    # )
 
-            "eval_step": 1,
+    # STAMP: sequential recommender (uses TIME_FIELD).
+    # Memory-friendly: embeddings + attention over a per-user item sequence.
+    # No negative sampling needed —
+
+
+    #RepeatNet dureaza foarte mult! Va trebui sa iau in calcul sa incerc pe o platforma de cloud pe o alta placa video sau sa il las balta
+    #Update la RepeatNet: fu antrenat, dar ramasai fara memorie la evaluare.....genial
+
+    # Switched off GRU4RecKG: despite its name, it doesn't consume .kg/.link
+    # triples — it expects a precomputed per-item embedding matrix in ml-32m.ent
+    # (loaded as preload_weight). Building that requires training a separate KG
+    # embedding model first.
+    #
+    # KGAT was the natural fallback (consumes .kg/.link directly), but in this
+    # env KGAT crashes during graph construction: it imports DGL, DGL 2.1.0
+    # imports torchdata.datapipes, and torchdata 0.11.0 removed that submodule.
+    # KGCN is the same family of model — graph aggregation over the KG — but
+    # uses dataset.kg_graph(form="coo") (scipy sparse) instead of DGL, so it
+    # avoids the broken import path entirely. Run build_ml32m_kg.py once first.
+
+    #de investigat daca merge mai repede SLIMElastic pe un alt GPU. De rulat, ruleaza.
+    #desi nu am incercat inca la EASE, RaCT, RecVAE, CDAE, MacridVAE, MultiDAE, MultiVAE, NCL, SGL, SpectralCF, GCMC,
+    # DGCF, NGCF posibil sa fie aceeasi problema
+
+    model_name = "FPMC"   #de investigat daca chiar merge sau nu FEARec. pana acuma am avut probleme cu memoria. Update: Acuma nu e problema cu memoria ci cu
+                            #timpul necesar doar pentru UN EPOCH
+    config_dict = {
+        "use_gpu": True,
+        "gpu_id": 0,
+        "data_path": "dataset/",
+        "worker": 0,
+        # Aggressive filter: drop users/items with <20 interactions.
+        # Cuts ML-32M (~32M rows) to ~10M rows so STAMP sequence build fits in RAM.
+        #"user_inter_num_interval": "[20,inf)",
+        #"item_inter_num_interval": "[20,inf)",
+        "loss_type": "CE",
+        "train_neg_sample_args": None,  # CE loss => no negative sampling
+        # Smoke test: 1 train epoch + 1 valid eval (every eval_step) + 1 final test eval.
+        "epochs": 1,
+        "eval_step": 1,
+        # GRU4RecF/KG default to selected_features=["class"] (LFM-1b leftover).
+        # ML-32M has no "class" field — point at genres (token_seq) instead.
+        "selected_features": ["genres"]
+    }
+
+    # RecBole "general" recommenders: classic CF over the user-item matrix —
+    # no sequences, no KG, no side features required. All consume only .inter.
+    GENERAL_MODELS = {
+        "Pop", "ItemKNN", "Random",
+        "BPR", "NeuMF", "ConvNCF", "DMF", "FISM", "NAIS",
+        "SpectralCF", "GCMC", "NGCF", "LightGCN", "DGCF",
+        "LINE", "MultiVAE", "MultiDAE", "MacridVAE", "CDAE",
+        "ENMF", "NNCF", "RaCT", "RecVAE",
+        "EASE", "SLIMElastic", "ADMMSLIM", "NCEPLRec",
+        "SGL", "SimpleX", "NCL", "DiffRec", "LDiffRec",
+    }
+
+    # Sequential recommenders build per-user item sequences in data_preparation;
+    # default MAX_ITEM_LIST_LENGTH=50 OOMs on ML-32M (~31M rows). Cap to 10.
+    SEQUENTIAL_MODELS = {
+        "STAMP", "GRU4Rec", "SASRec", "NARM", "BERT4Rec", "FOSSIL",
+        "Caser", "NextItNet", "FPMC", "SRGNN", "TransRec",
+        "HRM", "RepeatNet", "GRU4RecF", "GRU4RecKG",
+        "GRU4RecCPR", "SASRecCPR", "CORE", "FEARec", "LightSANs", "SINE",
+    }
+    if model_name in SEQUENTIAL_MODELS:
+        config_dict["MAX_ITEM_LIST_LENGTH"] = 10
+
+    DECISIONTREE_MODELS = {"XGBoost", "LightGBM"}
+    if model_name in DECISIONTREE_MODELS:
+        # RecBole looks for properties/model/XGBoost.yaml but the file on disk is
+        # xgboost.yaml (lowercase). On case-sensitive filesystems (WSL/Linux) the
+        # model defaults never load -> xgb_num_boost_round is None -> xgboost.train
+        # crashes on range(0, None). Supply the defaults explicitly.
+        config_dict["xgb_num_boost_round"] = 100
+        config_dict["convert_token_to_onehot"] = False  # keep off: 200k users x 87k items would OOM
+        config_dict["xgb_verbose_eval"] = 50
+        config_dict["xgb_params"] = {
+            "booster": "gbtree",
+            "objective": "binary:logistic",
+            "eval_metric": ["auc", "logloss"],
+            "max_depth": 6,
+            "eta": 0.1,
+            "seed": 2020,
+            "tree_method": "hist",
+            "device": "cuda",  # GPU. Remove this line (and use CPU) if device isn't recognized
         }
+
+    CONTEXT_MODELS = {
+        "LR", "FM", "FFM", "FwFM", "FmFM", "AFM", "NFM", "PNN",
+        "DeepFM", "DCN", "DCNV2", "xDeepFM", "WideDeep", "AutoInt",
+        "FNN", "DSSM", "FiGNN", "FiBiNET", "KD_DAGFM", "EulerNet",
+        "DIN", "DIEN", "XGBoost", "LightGBM"
+    }
+
+    if model_name in CONTEXT_MODELS:
+        config_dict["threshold"] = {"rating": 4.0}
+        config_dict["eval_args"] = {
+            "split": {"RS": [0.8, 0.1, 0.1]},
+            "order": "TO",
+            "group_by": None,
+            "mode": "labeled",
+        }
+        config_dict["metrics"] = ["AUC", "LogLoss","RMSE","MAE"]
+        config_dict["valid_metric"] = "AUC"
+        config_dict["topk"] = [10, 20]
+
+
+
+
+    # Models that support full-softmax CE loss (no negative sampling needed).
+    # Everything else (TransRec, FPMC, Caser, HRM, BPR, LightGCN, ...) uses
+    # pairwise BPR and crashes with KeyError: 'neg_item_id' if neg sampling is off.
+    # GRU4RecCPR/SASRecCPR are CE-only by design (their config says so).
+    CE_LOSS_MODELS = {
+        "STAMP", "GRU4Rec", "SASRec", "NARM", "BERT4Rec", "HRM", "HGN", "S3Rec",
+        "NextItNet", "SRGNN", "GRU4RecF", "GRU4RecKG", "SHAN", "SASRecF",
+        "GRU4RecCPR", "SASRecCPR", "CORE", "FEARec", "LightSANs", "FOSSIL", "NPE", "KSR", "Caser", "GCSAN"
+    }
+    if model_name not in CE_LOSS_MODELS:
+        config_dict.pop("loss_type", None)
+        config_dict.pop("train_neg_sample_args", None)
+
+    if model_name == "KSR":
+        config_dict["additional_feat_suffix"] = ["ent", "rel"]  # -> ml-32m.ent, ml-32m.rel
+        config_dict["alias_of_entity_id"] = ["ent_id"]
+        config_dict["alias_of_relation_id"] = ["rel_id"]
+        config_dict["preload_weight"] = {"ent_id": "ent_emb", "rel_id": "rel_emb"}
+
+    # Models whose full_sort_predict materializes (batch, n_items, dim) — e.g.
+    # TransRec repeats the item-embedding matrix per user, so the default
+    # eval_batch_size=4096 blows past VRAM on ML-32M (~12 GB just for that tensor).
+    HEAVY_EVAL_MODELS = {"TransRec"}
+    if model_name in HEAVY_EVAL_MODELS:
+        config_dict["eval_batch_size"] = 1024 #de la 1024 par sa fie probleme, dar mai incerc o singura data
+
+    # selected_features only makes sense for models that consume .item side info
+    # via the FeatureSeqEmbLayer (the *F / *KG sequential variants and the FM
+    # family). KGAT/KGCN/CFKG/etc. consume the KG instead — leaving the key in
+    # for them is harmless but misleading.
+    FEATURE_AWARE_MODELS = {"GRU4RecF", "GRU4RecKG"}
+    if model_name not in FEATURE_AWARE_MODELS:
+        config_dict.pop("selected_features", None)
+
+    # GRU4RecKG calls dataset.get_preload_weight("ent_id") to seed an
+    # nn.Embedding(n_items, embedding_size). This needs:
+    #   - additional_feat_suffix=[ent]  -> load ml-32m.ent
+    #   - alias_of_item_id=[ent_id]    -> share the token vocabulary with
+    #                                     item_id, so field2id_token['ent_id']
+    #                                     gets populated during remap (without
+    #                                     this, _preload_weight_matrix raises
+    #                                     KeyError: 'ent_id')
+    #   - preload_weight={ent_id: ent_emb} -> wire the float_seq column into
+    #                                         the preload matrix; the model
+    #                                         then slices [:n_items]
+    # Run train_kg_embeddings.py once before this so ml-32m.ent exists.
+    if model_name == "GRU4RecKG":
+        config_dict["additional_feat_suffix"] = ["ent"]
+        config_dict["alias_of_item_id"] = ["ent_id"]
+        config_dict["preload_weight"] = {"ent_id": "ent_emb"}
+
+    # if model_name == "BERT4Rec":
+    #     config_dict["MAX_ITEM_LIST_LENGTH"] = 5
+
+    config = Config(
+        model=model_name,
+        config_file_list=["config/ml-32m.yaml"],
+        config_dict=config_dict,
     )
 
     # Initialize Logger
@@ -384,7 +588,7 @@ def run_ml32m():
     train_data, valid_data, test_data = data_preparation(config, dataset)
 
     # Model Initialization
-    # .to(config['device']) moves the model to GPU automatically if configured above
+    # .to(config['device']) moves the model to GPU automatically if configured above.
     model = get_model(config["model"])(
         config, train_data.dataset
     ).to(config["device"])

@@ -16,7 +16,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # ---- Config ----
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent.parent
 CSV_PATH = HERE / "users.csv"
 OUT_AGE = HERE / "age_distribution.png"
 OUT_OCC = HERE / "occupation_distribution.png"

@@ -66,9 +66,10 @@ from vllm.distributed.parallel_state import destroy_model_parallel  # noqa: E402
 @dataclass(frozen=True)
 class Config:
     # Paths
-    bpr_model_path: str = "saved/BPR-Jan-18-2026_12-28-14.pth"
+    bpr_model_path: str = "saved/BPR-Sep-15-2026_21-00-22.pth"#"saved/BPR-Jan-18-2026_12-28-14.pth"
     movies_file: str = "dataset/ml-32m/movies.csv"
-    output_csv: str = "all_users_explanations_metrics.csv"
+    #output_csv: str = "all_users_explanations_metrics.csv"
+    output_csv: str = "all_users_explanations_metrics_01.05.2026.csv"
 
     # Recommendation sizes
     top_k: int = 5
@@ -1238,13 +1239,15 @@ def main() -> None:
 if __name__ == "__main__":
     import argparse
 
+    calculate_global_metrics(CFG.output_csv)
+
     parser = argparse.ArgumentParser(
         description="Two-phase recsys XAI pipeline (subprocess-isolated).",
     )
     parser.add_argument(
         "--phase",
         choices=["generate", "evaluate", "all"],
-        default="all",
+        default="generate",
         help=(
             "'generate' = BPR top-K + Qwen explanations + per-row metrics "
             "(writes the base CSV). "

@@ -10,6 +10,19 @@ nothing you generate there will be committed.
 
 All commands are run from the repository root.
 
+### Private copy
+
+The author keeps a private backup of the prepared `dataset/` folder on Google
+Drive, in:
+
+```
+My Drive › PhD Thesis Data › Simulating Users to Evaluate LLM-Generated Explanations in Recommender Systems › dataset
+```
+
+The folder is not public. Collaborators who have been given access can place it in
+the repository root and skip the steps below. Everyone else should rebuild the data
+from the original sources.
+
 ### 1. Download MovieLens-32M
 
 Download `ml-32m.zip` from <https://grouplens.org/datasets/movielens/32m/> and

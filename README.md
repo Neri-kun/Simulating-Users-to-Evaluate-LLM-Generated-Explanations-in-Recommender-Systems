@@ -10,19 +10,27 @@ nothing you generate there will be committed.
 
 All commands are run from the repository root.
 
-### Prepared copy
+### Prepared copy (Git LFS)
 
-A copy of the prepared `dataset/` folder is available on
-[Google Drive](https://drive.google.com/drive/folders/19Vm6dLNiNN4SjXfveTDhet2FwF9XUERu?usp=drive_link),
-under `Simulating Users to Evaluate LLM-Generated Explanations in Recommender Systems/dataset`.
-Download it and place `dataset/` in the repository root to skip the steps below.
+The prepared `dataset/ml-32m/` folder is stored in this repository with
+[Git LFS](https://git-lfs.com/), about 2.7 GB. Install Git LFS before cloning, and
+the files download automatically:
 
-The data stays under its original licenses: the
+```bash
+git lfs install
+git clone https://github.com/Neri-kun/Simulating-Users-to-Evaluate-LLM-Generated-Explanations-in-Recommender-Systems.git
+```
+
+If you cloned without Git LFS, the files will be small pointer files. Run
+`git lfs pull` to download the data. To clone only the code, set
+`GIT_LFS_SKIP_SMUDGE=1` before cloning.
+
+With the prepared copy you can skip the steps below. The data stays under its original licenses: the
 [MovieLens terms of use](https://files.grouplens.org/datasets/movielens/ml-32m-README.html)
 (non-commercial use, citation required; see [Citation](#citation)) and the
 [IMDb non-commercial terms](https://developer.imdb.com/non-commercial-datasets/)
-for the IMDb-derived knowledge-graph files. If you prefer, or the link is
-unavailable, rebuild the data from the original sources as described below.
+for the IMDb-derived knowledge-graph files. If you prefer, or the LFS
+download is unavailable, rebuild the data from the original sources as described below.
 
 ### 1. Download MovieLens-32M
 

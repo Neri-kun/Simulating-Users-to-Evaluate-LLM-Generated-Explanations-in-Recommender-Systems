@@ -38,7 +38,7 @@ credentials*
 # from the original sources instead - see README.md.
 # ---------------------------------------------------------------------------
 data/
-dataset/
+dataset/*
 datasets/
 ml-1m/
 ml-10m/
@@ -109,3 +109,12 @@ figures/
 *.svg
 *.csv
 *.json
+
+# ---------------------------------------------------------------------------
+# dataset/ml-32m/ is tracked with Git LFS (see .gitattributes). These rules come
+# last so they override the dataset/, file-type and *.csv rules above. Exact duplicates stay out.
+# ---------------------------------------------------------------------------
+!dataset/ml-32m/
+!dataset/ml-32m/*
+dataset/ml-32m/ml-32m_tab.inter
+dataset/ml-32m/*.bak

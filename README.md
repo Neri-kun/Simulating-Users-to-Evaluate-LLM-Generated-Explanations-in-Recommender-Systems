@@ -10,18 +10,19 @@ nothing you generate there will be committed.
 
 All commands are run from the repository root.
 
-### Private copy
+### Prepared copy
 
-The author keeps a private backup of the prepared `dataset/` folder on
-[Google Drive](https://drive.google.com/drive/folders/19Vm6dLNiNN4SjXfveTDhet2FwF9XUERu?usp=drive_link), in:
+A copy of the prepared `dataset/` folder is available on
+[Google Drive](https://drive.google.com/drive/folders/19Vm6dLNiNN4SjXfveTDhet2FwF9XUERu?usp=drive_link),
+under `Simulating Users to Evaluate LLM-Generated Explanations in Recommender Systems/dataset`.
+Download it and place `dataset/` in the repository root to skip the steps below.
 
-```
-My Drive › PhD Thesis Data › Simulating Users to Evaluate LLM-Generated Explanations in Recommender Systems › dataset
-```
-
-The folder is not public, and the link opens only for accounts it has been shared with. Collaborators who have been given access can place it in
-the repository root and skip the steps below. Everyone else should rebuild the data
-from the original sources.
+The data stays under its original licenses: the
+[MovieLens terms of use](https://files.grouplens.org/datasets/movielens/ml-32m-README.html)
+(non-commercial use, citation required; see [Citation](#citation)) and the
+[IMDb non-commercial terms](https://developer.imdb.com/non-commercial-datasets/)
+for the IMDb-derived knowledge-graph files. If you prefer, or the link is
+unavailable, rebuild the data from the original sources as described below.
 
 ### 1. Download MovieLens-32M
 

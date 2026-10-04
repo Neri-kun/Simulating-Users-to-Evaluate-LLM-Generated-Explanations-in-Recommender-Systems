@@ -12,14 +12,14 @@ All commands are run from the repository root.
 
 ### Private copy
 
-The author keeps a private backup of the prepared `dataset/` folder on Google
-Drive, in:
+The author keeps a private backup of the prepared `dataset/` folder on
+[Google Drive](https://drive.google.com/drive/folders/19Vm6dLNiNN4SjXfveTDhet2FwF9XUERu?usp=drive_link), in:
 
 ```
 My Drive › PhD Thesis Data › Simulating Users to Evaluate LLM-Generated Explanations in Recommender Systems › dataset
 ```
 
-The folder is not public. Collaborators who have been given access can place it in
+The folder is not public, and the link opens only for accounts it has been shared with. Collaborators who have been given access can place it in
 the repository root and skip the steps below. Everyone else should rebuild the data
 from the original sources.
 
